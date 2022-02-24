@@ -15,9 +15,10 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Version file
+ * Plugin version and other meta-data are defined here.
  *
- * @author      Toni Ginard <aginard@xtec.cat>
+ * @package     local_courseoverview
+ * @author      Toni Ginard <toni.ginard@ticxcat.cat>
  * @copyright   2022 Departament d'Educació - Generalitat de Catalunya
  * @license     http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
@@ -25,5 +26,10 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_courseoverview';
-$plugin->version = 2022020900;
-$plugin->requires = 2020110900; // Moodle 3.10
+$plugin->release = '1.0.0';
+$plugin->version = 2022031100;
+$plugin->requires = 2020110900; // Moodle 3.10.
+$plugin->maturity = MATURITY_BETA;
+$plugin->dependencies = [
+    'block_myoverview' => 2020110900,
+];

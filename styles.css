@@ -1,0 +1,23 @@
+/* Card format */
+.dashboard-card .local-course-overview-container {
+    padding: 0 0 .8rem .8rem;
+}
+
+/* List format */
+.list-group-item .local-course-overview-container {
+    padding: 0;
+}
+
+/* Summary format */
+.course-summaryitem .local-course-overview-container {
+    margin-top: -15px;
+    margin-left: 85px;
+}
+
+.local-course-overview-item {
+    padding-right: 0.6rem;
+}
+
+.local-course-overview-item img {
+    vertical-align: text-top;
+}

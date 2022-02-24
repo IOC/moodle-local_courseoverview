@@ -14,24 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
+namespace local_courseoverview\privacy;
+
 /**
  * Privacy Subsystem for local_courseview.
  *
- * @author     Toni Ginard
- * @package    local_courseview
- * @copyright  2022 Departament d'Educació - Generalitat de Catalunya
- * @license    https://www.gnu.org/licenses/gpl-3.0.html GNU GPL v3 or later
- */
-
-namespace local_courseoverview\privacy;
-
-defined('MOODLE_INTERNAL') || die();
-
-/**
- * Privacy Subsystem for local_courseoverview implementing null_provider.
- *
- * @copyright  2022 Departament d'Educació - Generalitat de Catalunya
- * @license    https://www.gnu.org/licenses/gpl-3.0.html GNU GPL v3 or later
+ * @package     local_courseoverview
+ * @author      Toni Ginard <toni.ginard@ticxcat.cat>
+ * @copyright   2022 Departament d'Educació - Generalitat de Catalunya
+ * @license     http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class provider implements \core_privacy\local\metadata\null_provider {
 

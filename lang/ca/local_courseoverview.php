@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * English language files for local_courseview.
+ * Catalan language files for local_courseview.
  *
  * @package     local_courseoverview
  * @author      Toni Ginard <toni.ginard@ticxcat.cat>
@@ -23,9 +23,9 @@
  * @license     http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-$string['pluginname'] = 'Local course overview';
-$string['privacy:metadata'] = 'This plugin does not store any personal data.';
-$string['pendingassignments'] = 'Pending assignments';
-$string['pendingassignmentsteacher'] = 'Assignments pending to grade';
-$string['pendingquizzes'] = 'Pending quizzes';
-$string['pendingquizzesteacher'] = 'Quizzes pending to review';
+$string['pluginname'] = 'Llista de cursos';
+$string['privacy:metadata'] = 'Aquest connector no desa dades personals.';
+$string['pendingassignments'] = 'Tasques pendents';
+$string['pendingassignmentsteacher'] = 'Tasques pendents d\'avaluar';
+$string['pendingquizzes'] = 'Qüestionaris pendents';
+$string['pendingquizzesteacher'] = 'Qüestionaris pendents d\'avaluar';
