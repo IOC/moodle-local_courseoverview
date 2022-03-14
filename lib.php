@@ -54,7 +54,7 @@ function local_courseoverview_before_footer() {
 
         foreach ($coursesenrolled as $course) {
 
-            $unreadforums = count_pending_forum($course->id, $USER->id);
+            $unreadforums = count_pending_forum($USER->id, $course);
 
             $coursecontext = \context_course::instance($course->id);
 
@@ -109,25 +109,29 @@ function local_courseoverview_before_footer() {
 }
 
 /**
- * Counts the number of unread forum posts in a course.
+ * Counts the number of unread forum posts in a course. Is aware of the user groups.
  *
- * @param int $courseid
  * @param int $userid
+ * @param stdClass $course
  * @return int The number of pending forum posts.
+ * @throws coding_exception
  */
-function count_pending_forum(int $courseid, int $userid): int {
+function count_pending_forum(int $userid, stdClass $course): int {
 
     $totalunread = 0;
+    $modulename = 'forum';
 
-    // Get reading information.
-    $unreadposts = forum_tp_get_course_unread_posts($userid, $courseid);
+    // Get all the forums in the course.
+    $forums = get_all_instances_in_course($modulename, $course, $userid);
 
-    // Sum the number of unread forums.
-    foreach ($unreadposts as $item) {
-        $totalunread += $item->unread;
+    // Count the number of unread forum posts in each forum, being aware of the user groups.
+    foreach ($forums as $forum) {
+        $cm = get_coursemodule_from_instance($modulename, $forum->id, $course->id);
+        $totalunread += forum_tp_count_forum_unread_posts($cm, $course);
     }
 
     return $totalunread;
+
 }
 
 /**
@@ -444,7 +448,6 @@ function count_teacher_pending_quiz(stdClass $course, int $userid): int {
 
     return $sum;
 }
-
 
 /**
  * Get the list of assignment id's that meet the restrictions.
