@@ -155,25 +155,7 @@ function count_student_pending_assign(stdClass $course, int $userid): int {
 
     // Do assignment_base::isopen() here without loading the whole thing for speed.
     foreach ($assignments as $assignment) {
-        if ($assignment->duedate) {
-            $duedate = false;
-            if ($assignment->cutoffdate) {
-                $duedate = $assignment->cutoffdate;
-            }
-            if ($duedate) {
-                $isopen = ($assignment->allowsubmissionsfromdate <= $time && $time <= $duedate);
-            } else {
-                $isopen = ($assignment->allowsubmissionsfromdate <= $time);
-            }
-        } else if ($assignment->allowsubmissionsfromdate) {
-            $isopen = ($assignment->allowsubmissionsfromdate <= $time);
-        } else {
-            $isopen = true;
-        }
-
-        if ($isopen) {
-            $assignmentids[] = $assignment->id;
-        }
+        $assignmentids = getAssignmentids($assignment, $time, $assignmentids);
     }
 
     if (empty($assignmentids)) {
@@ -242,25 +224,7 @@ function count_teacher_pending_assign(stdClass $course, int $userid): int {
 
     // Do assignment_base::isopen() here without loading the whole thing for speed.
     foreach ($assignments as $key => $assignment) {
-        if ($assignment->duedate) {
-            $duedate = false;
-            if ($assignment->cutoffdate) {
-                $duedate = $assignment->cutoffdate;
-            }
-            if ($duedate) {
-                $isopen = ($assignment->allowsubmissionsfromdate <= $time && $time <= $duedate);
-            } else {
-                $isopen = ($assignment->allowsubmissionsfromdate <= $time);
-            }
-        } else if ($assignment->allowsubmissionsfromdate) {
-            $isopen = ($assignment->allowsubmissionsfromdate <= $time);
-        } else {
-            $isopen = true;
-        }
-
-        if ($isopen) {
-            $assignmentids[] = $assignment->id;
-        }
+        $assignmentids = getAssignmentids($assignment, $time, $assignmentids);
     }
 
     if (empty($assignmentids)) {
@@ -479,6 +443,40 @@ function count_teacher_pending_quiz(stdClass $course, int $userid): int {
     }
 
     return $sum;
+}
+
+
+/**
+ * Get the list of assignment id's that meet the restrictions.
+ *
+ * @param $assignment
+ * @param int $time
+ * @param array $assignmentids
+ * @return array
+ */
+function getAssignmentids($assignment, int $time, array $assignmentids): array {
+
+    if ($assignment->duedate) {
+        $duedate = false;
+        if ($assignment->cutoffdate) {
+            $duedate = $assignment->cutoffdate;
+        }
+        if ($duedate) {
+            $isopen = ($assignment->allowsubmissionsfromdate <= $time && $time <= $duedate);
+        } else {
+            $isopen = ($assignment->allowsubmissionsfromdate <= $time);
+        }
+    } else if ($assignment->allowsubmissionsfromdate) {
+        $isopen = ($assignment->allowsubmissionsfromdate <= $time);
+    } else {
+        $isopen = true;
+    }
+
+    if ($isopen) {
+        $assignmentids[] = $assignment->id;
+    }
+
+    return $assignmentids;
 }
 
 /**
