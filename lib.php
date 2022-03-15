@@ -157,9 +157,25 @@ function count_student_pending_assign(stdClass $course, int $userid): int {
 
     $assignments = get_all_instances_in_course($modulename, $course, $userid);
 
-    // Do assignment_base::isopen() here without loading the whole thing for speed.
     foreach ($assignments as $assignment) {
-        $assignmentids = getAssignmentids($assignment, $time, $assignmentids);
+        // Check for groups in the assignment.
+        if ($assignment->teamsubmission) {
+            // Create an assignment object in order to call its member functions.
+            $context = \context_module::instance($assignment->coursemodule);
+            $cm = get_coursemodule_from_instance($modulename, $assignment->id);
+            $assign = new \assign($context, $cm, $course);
+
+            // If the group have already submitted the assignment, get it. If not, false is returned.
+            $submission = $assign->get_group_submission($userid, 0, false);
+
+            if (!$submission || $submission->status !== ASSIGN_SUBMISSION_STATUS_SUBMITTED) {
+                // There is no group submission yet, so add the assignment to the array.
+                $assignmentids = getassignmentids($assignment, $time, $assignmentids);
+            }
+        } else {
+            // Add the element to the array unconditionally.
+            $assignmentids = getassignmentids($assignment, $time, $assignmentids);
+        }
     }
 
     if (empty($assignmentids)) {
@@ -226,9 +242,8 @@ function count_teacher_pending_assign(stdClass $course, int $userid): int {
 
     $assignments = get_all_instances_in_course($modulename, $course, $userid);
 
-    // Do assignment_base::isopen() here without loading the whole thing for speed.
-    foreach ($assignments as $key => $assignment) {
-        $assignmentids = getAssignmentids($assignment, $time, $assignmentids);
+    foreach ($assignments as $assignment) {
+        $assignmentids = getassignmentids($assignment, $time, $assignmentids);
     }
 
     if (empty($assignmentids)) {
@@ -286,12 +301,28 @@ function count_teacher_pending_assign(stdClass $course, int $userid): int {
 
         $context = \context_module::instance($assignment->coursemodule);
 
-        if (has_capability('mod/assign:grade', $context, $userid)
-            && $students = get_enrolled_users($context, 'mod/assign:view', 0, 'u.id')) {
-            foreach ($students as $student) {
-                if (isset($unmarkedsubmissions[$assignment->id][$student->id])
-                    && !in_array($assignment->id, $ids, true)) {
-                    $sum++;
+        if (has_capability('mod/assign:grade', $context, $userid)) {
+
+            $groupid = 0;
+
+            // If students submit in groups, find out the group id of the user and update $groupid.
+            if ($assignment->teamsubmission) {
+                // Create an assignment object in order to call its member functions.
+                $context = \context_module::instance($assignment->coursemodule);
+                $cm = get_coursemodule_from_instance($modulename, $assignment->id);
+                $assign = new \assign($context, $cm, $course);
+
+                // Update the group id.
+                $groupid = $assign->get_submission_group($userid)->id;
+            }
+
+            $students = get_enrolled_users($context, 'mod/assign:view', $groupid, 'u.id');
+
+            if (!empty($students)) {
+                foreach ($students as $student) {
+                    if (isset($unmarkedsubmissions[$assignment->id][$student->id]) && !in_array($assignment->id, $ids, true)) {
+                        $sum++;
+                    }
                 }
             }
         }
@@ -452,12 +483,12 @@ function count_teacher_pending_quiz(stdClass $course, int $userid): int {
 /**
  * Get the list of assignment id's that meet the restrictions.
  *
- * @param $assignment
+ * @param stdClass $assignment
  * @param int $time
  * @param array $assignmentids
  * @return array
  */
-function getAssignmentids($assignment, int $time, array $assignmentids): array {
+function getassignmentids(stdClass $assignment, int $time, array $assignmentids): array {
 
     if ($assignment->duedate) {
         $duedate = false;
