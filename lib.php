@@ -23,6 +23,10 @@
  * @license     http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+const MODULE_FORUM_NAME = 'forum';
+const MODULE_ASSIGN_NAME = 'assign';
+const MODULE_QUIZ_NAME = 'quiz';
+
 /**
  * Calculates the number of unread messages, pending tasks and pending
  * quizzes in all user courses.
@@ -119,14 +123,13 @@ function local_courseoverview_before_footer() {
 function count_pending_forum(int $userid, stdClass $course): int {
 
     $totalunread = 0;
-    $modulename = 'forum';
 
     // Get all the forums in the course.
-    $forums = get_all_instances_in_course($modulename, $course, $userid);
+    $forums = get_all_instances_in_course(MODULE_FORUM_NAME, $course, $userid);
 
     // Count the number of unread forum posts in each forum, being aware of the user groups.
     foreach ($forums as $forum) {
-        $cm = get_coursemodule_from_instance($modulename, $forum->id, $course->id);
+        $cm = get_coursemodule_from_instance(MODULE_FORUM_NAME, $forum->id, $course->id);
         $totalunread += forum_tp_count_forum_unread_posts($cm, $course);
     }
 
@@ -150,31 +153,19 @@ function count_student_pending_assign(stdClass $course, int $userid): int {
     global $DB;
 
     $sum = 0;
-    $ids = [];
     $assignmentids = [];
-    $modulename = 'assign';
     $time = time();
 
-    $assignments = get_all_instances_in_course($modulename, $course, $userid);
+    $assignments = get_all_instances_in_course(MODULE_ASSIGN_NAME, $course, $userid);
 
     foreach ($assignments as $assignment) {
         // Check for groups in the assignment.
         if ($assignment->teamsubmission) {
-            // Create an assignment object in order to call its member functions.
-            $context = \context_module::instance($assignment->coursemodule);
-            $cm = get_coursemodule_from_instance($modulename, $assignment->id);
-            $assign = new \assign($context, $cm, $course);
-
-            // If the group have already submitted the assignment, get it. If not, false is returned.
-            $submission = $assign->get_group_submission($userid, 0, false);
-
-            if (!$submission || $submission->status !== ASSIGN_SUBMISSION_STATUS_SUBMITTED) {
-                // There is no group submission yet, so add the assignment to the array.
-                $assignmentids = getassignmentids($assignment, $time, $assignmentids);
-            }
+            // This function adds the assignment id to the list if the assignment is already submitted by any of the group members.
+            $assignmentids = get_assignment_ids_teamsubmission($assignment, $course, $userid, $time, $assignmentids);
         } else {
             // Add the element to the array unconditionally.
-            $assignmentids = getassignmentids($assignment, $time, $assignmentids);
+            $assignmentids = get_assignment_ids($assignment, $time, $assignmentids);
         }
     }
 
@@ -184,35 +175,22 @@ function count_student_pending_assign(stdClass $course, int $userid): int {
     }
 
     foreach ($assignments as $assignment) {
-        // Ignore assignments that are not open.
-        if (!in_array($assignment->id, $assignmentids, true)) {
+
+        // Check if assignment is open, is visible, is available and has a specified capability.
+        if (is_assignment_filtered($assignment, $course->id, $userid, $assignmentids, 'mod/assign:submit')) {
             continue;
         }
 
-        // Check visibility.
-        if (!$assignment->visible) {
-            continue;
-        }
+        $params = [
+            'status' => 'submitted',
+            'userid' => $userid,
+            'assignment' => $assignment->id,
+        ];
 
-        // Check availability.
-        $cm = get_coursemodule_from_instance($modulename, $assignment->id, $course->id);
-        if (!\core_availability\info_module::is_user_visible($cm, $userid)) {
-            continue;
-        }
+        $mysubmissions = $DB->count_records('assign_submission', $params);
 
-        $context = \context_module::instance($assignment->coursemodule);
-
-        if (has_capability('mod/assign:submit', $context, $userid)) {
-            $params = [
-                'status' => 'submitted',
-                'userid' => $userid,
-                'assignment' => $assignment->id,
-            ];
-            $mysubmissions = $DB->count_records('assign_submission', $params);
-
-            if (!$mysubmissions && !in_array($assignment->id, $ids, true)) {
-                $sum++;
-            }
+        if (!$mysubmissions) {
+            $sum++;
         }
     }
 
@@ -235,15 +213,13 @@ function count_teacher_pending_assign(stdClass $course, int $userid): int {
     global $DB;
 
     $sum = 0;
-    $ids = [];
-    $modulename = 'assign';
     $assignmentids = [];
     $time = time();
 
-    $assignments = get_all_instances_in_course($modulename, $course, $userid);
+    $assignments = get_all_instances_in_course(MODULE_ASSIGN_NAME, $course, $userid);
 
     foreach ($assignments as $assignment) {
-        $assignmentids = getassignmentids($assignment, $time, $assignmentids);
+        $assignmentids = get_assignment_ids($assignment, $time, $assignmentids);
     }
 
     if (empty($assignmentids)) {
@@ -252,78 +228,39 @@ function count_teacher_pending_assign(stdClass $course, int $userid): int {
     }
 
     [$sqlassignmentids, $assignmentidparams] = $DB->get_in_or_equal($assignmentids);
-
-    // Build up an array of unmarked submissions indexed by assignment id / user id
-    // for use where the user has grading rights on assignment.
-    $unmarkedsubmissions = [];
     $dbparams = array_merge([ASSIGN_SUBMISSION_STATUS_SUBMITTED], $assignmentidparams);
 
-    $rs = $DB->get_recordset_sql('SELECT
-                                          s.assignment AS assignment,
-                                          s.userid AS userid,
-                                          s.id AS id,
-                                          s.status AS status,
-                                          g.timemodified AS timegraded
-                                      FROM {assign_submission} s
-                                      LEFT JOIN {assign_grades} g ON
-                                          s.userid = g.userid AND
-                                          s.assignment = g.assignment AND
-                                          g.attemptnumber = s.attemptnumber
-                                      WHERE
-                                          (g.timemodified IS NULL OR s.timemodified > g.timemodified OR g.grade IS NULL) AND
-                                          s.timemodified IS NOT NULL AND
-                                          s.status = ? AND
-                                          s.latest = 1 AND
-                                          s.assignment ' . $sqlassignmentids, $dbparams);
-
-    foreach ($rs as $rd) {
-        $unmarkedsubmissions[$rd->assignment][$rd->userid] = $rd->id;
-    }
-
-    $rs->close();
+    $unmarkedsubmissions = get_unmarked_submissions($sqlassignmentids, $dbparams);
 
     foreach ($assignments as $assignment) {
-        // Ignore assignments that are not open.
-        if (!in_array($assignment->id, $assignmentids, true)) {
+
+        // Check if assignment is open, is visible, is available and has a specified capability.
+        if (is_assignment_filtered($assignment, $course->id, $userid, $assignmentids, 'mod/assign:grade')) {
             continue;
         }
 
-        // Check visibility.
-        if (!$assignment->visible) {
-            continue;
-        }
-
-        // Check availability.
-        $cm = get_coursemodule_from_instance($modulename, $assignment->id, $course->id);
-        if (!\core_availability\info_module::is_user_visible($cm, $userid)) {
-            continue;
-        }
-
+        $groupid = 0;
         $context = \context_module::instance($assignment->coursemodule);
 
-        if (has_capability('mod/assign:grade', $context, $userid)) {
+        // If students submit in groups, find out the group id of the user and update $groupid.
+        if ($assignment->teamsubmission) {
+            // Create an assignment object in order to call its member functions.
+            $cm = get_coursemodule_from_instance(MODULE_ASSIGN_NAME, $assignment->id);
+            $assign = new \assign($context, $cm, $course);
 
-            $groupid = 0;
+            // Update the group id.
+            $groupid = $assign->get_submission_group($userid)->id;
+        }
 
-            // If students submit in groups, find out the group id of the user and update $groupid.
-            if ($assignment->teamsubmission) {
-                // Create an assignment object in order to call its member functions.
-                $context = \context_module::instance($assignment->coursemodule);
-                $cm = get_coursemodule_from_instance($modulename, $assignment->id);
-                $assign = new \assign($context, $cm, $course);
+        $students = get_enrolled_users($context, 'mod/assign:view', $groupid, 'u.id');
 
-                // Update the group id.
-                $groupid = $assign->get_submission_group($userid)->id;
-            }
+        if (empty($students)) {
+            continue;
+        }
 
-            $students = get_enrolled_users($context, 'mod/assign:view', $groupid, 'u.id');
-
-            if (!empty($students)) {
-                foreach ($students as $student) {
-                    if (isset($unmarkedsubmissions[$assignment->id][$student->id]) && !in_array($assignment->id, $ids, true)) {
-                        $sum++;
-                    }
-                }
+        foreach ($students as $student) {
+            if (isset($unmarkedsubmissions[$assignment->id][$student->id])) {
+                $sum++;
             }
         }
     }
@@ -344,15 +281,12 @@ function count_teacher_pending_assign(stdClass $course, int $userid): int {
 function count_student_pending_quiz(stdClass $course, int $userid): int {
 
     $sum = 0;
-    $modulename = 'quiz';
-    $now = time();
 
-    $quizzes = get_all_instances_in_course($modulename, $course, $userid);
+    $quizzes = get_all_instances_in_course(MODULE_QUIZ_NAME, $course, $userid);
 
     foreach ($quizzes as $quiz) {
-        if (($quiz->timeclose >= $now && $quiz->timeopen < $now) ||
-            ((int)$quiz->timeclose === 0 && $quiz->timeopen < $now) ||
-            ((int)$quiz->timeclose === 0 && (int)$quiz->timeopen === 0)) {
+
+        if (check_quiz_time($quiz)) {
 
             // Check visibility.
             if (!$quiz->visible) {
@@ -360,18 +294,21 @@ function count_student_pending_quiz(stdClass $course, int $userid): int {
             }
 
             // Check availability.
-            $cm = get_coursemodule_from_instance($modulename, $quiz->id, $course->id);
+            $cm = get_coursemodule_from_instance(MODULE_QUIZ_NAME, $quiz->id, $course->id);
             if (!\core_availability\info_module::is_user_visible($cm, $userid)) {
                 continue;
             }
 
             $context = \context_module::instance($quiz->coursemodule);
-            if (!has_capability('mod/quiz:viewreports', $context, $userid)) {
-                // Student: Count the attempts they have made.
-                $attempts = quiz_get_user_attempts($quiz->id, $userid);
-                if (count($attempts) === 0) {
-                    $sum++;
-                }
+
+            if (has_capability('mod/quiz:viewreports', $context, $userid)) {
+                continue;
+            }
+
+            // Student: Count the attempts they have made.
+            $attempts = quiz_get_user_attempts($quiz->id, $userid);
+            if (count($attempts) === 0) {
+                $sum++;
             }
         }
     }
@@ -395,11 +332,8 @@ function count_teacher_pending_quiz(stdClass $course, int $userid): int {
     global $DB;
 
     $sum = 0;
-    $ids = [];
-    $modulename = 'quiz';
-    $now = time();
 
-    $quizzes = get_all_instances_in_course($modulename, $course, $userid);
+    $quizzes = get_all_instances_in_course(MODULE_QUIZ_NAME, $course, $userid);
 
     foreach ($quizzes as $quiz) {
         $cm = get_coursemodule_from_id('quiz', $quiz->coursemodule);
@@ -431,10 +365,7 @@ function count_teacher_pending_quiz(stdClass $course, int $userid): int {
             continue;
         }
 
-        // Check quiz time close.
-        if (($quiz->timeclose >= $now && $quiz->timeopen < $now) ||
-            ((int)$quiz->timeclose === 0 && $quiz->timeopen < $now) ||
-            ((int)$quiz->timeclose === 0 && (int)$quiz->timeopen === 0)) {
+        if (check_quiz_time($quiz)) {
 
             $context = \context_module::instance($quiz->coursemodule);
 
@@ -465,8 +396,7 @@ function count_teacher_pending_quiz(stdClass $course, int $userid): int {
                             }
 
                             // Check if the status is "pending of grading".
-                            if (!in_array($quiz->id, $ids, true) &&
-                                ($attemptobject->get_question_status($slot, true) === get_string('requiresgrading', 'question'))) {
+                            if ($attemptobject->get_question_status($slot, true) === get_string('requiresgrading', 'question')) {
                                 $sum++;
                                 continue 4;
                             }
@@ -488,7 +418,7 @@ function count_teacher_pending_quiz(stdClass $course, int $userid): int {
  * @param array $assignmentids
  * @return array
  */
-function getassignmentids(stdClass $assignment, int $time, array $assignmentids): array {
+function get_assignment_ids(stdClass $assignment, int $time, array $assignmentids): array {
 
     if ($assignment->duedate) {
         $duedate = false;
@@ -511,6 +441,134 @@ function getassignmentids(stdClass $assignment, int $time, array $assignmentids)
     }
 
     return $assignmentids;
+}
+
+/**
+ * Check if the assignment is already submitted by any of the group members.
+ *
+ * @param stdClass $assignment
+ * @param stdClass $course
+ * @param int $userid
+ * @param int $time
+ * @param array $assignmentids
+ * @return array
+ * @throws coding_exception
+ */
+function get_assignment_ids_teamsubmission(stdClass $assignment, stdClass $course, int $userid, int $time, array $assignmentids): array {
+
+    // Create an assignment object in order to call its member functions.
+    $context = \context_module::instance($assignment->coursemodule);
+    $cm = get_coursemodule_from_instance(MODULE_ASSIGN_NAME, $assignment->id);
+    $assign = new \assign($context, $cm, $course);
+
+    // If the group have already submitted the assignment, get it.
+    $submission = $assign->get_group_submission($userid, 0, false);
+
+    if (!$submission || $submission->status !== ASSIGN_SUBMISSION_STATUS_SUBMITTED) {
+        // There is no group submission yet, so add the assignment to the array.
+        $assignmentids = get_assignment_ids($assignment, $time, $assignmentids);
+    }
+
+    return $assignmentids;
+
+}
+
+/**
+ * Build up an array of unmarked submissions indexed by assignment id / user id for use where
+ * the user has grading rights on assignment.
+ *
+ * @param $sqlassignmentids
+ * @param array $dbparams
+ * @return array
+ * @throws dml_exception
+ */
+function get_unmarked_submissions($sqlassignmentids, array $dbparams): array {
+
+    global $DB;
+
+    $unmarkedsubmissions = [];
+
+    $rs = $DB->get_recordset_sql('SELECT
+                                          s.assignment AS assignment,
+                                          s.userid AS userid,
+                                          s.id AS id,
+                                          s.status AS status,
+                                          g.timemodified AS timegraded
+                                      FROM {assign_submission} s
+                                      LEFT JOIN {assign_grades} g ON
+                                          s.userid = g.userid AND
+                                          s.assignment = g.assignment AND
+                                          g.attemptnumber = s.attemptnumber
+                                      WHERE
+                                          (g.timemodified IS NULL OR s.timemodified > g.timemodified OR g.grade IS NULL) AND
+                                          s.timemodified IS NOT NULL AND
+                                          s.status = ? AND
+                                          s.latest = 1 AND
+                                          s.assignment ' . $sqlassignmentids, $dbparams);
+
+    foreach ($rs as $rd) {
+        $unmarkedsubmissions[$rd->assignment][$rd->userid] = $rd->id;
+    }
+
+    $rs->close();
+
+    return $unmarkedsubmissions;
+
+}
+
+/**
+ * Decide if the assignment is eligible or has to be discarded.
+ *
+ * @param $assignment
+ * @param $courseid
+ * @param $userid
+ * @param $assignmentids
+ * @param $capability
+ * @return bool
+ * @throws coding_exception
+ * @throws moodle_exception
+ */
+function is_assignment_filtered($assignment, $courseid, $userid, $assignmentids, $capability): bool {
+
+    // Ignore assignments that are not open.
+    if (!in_array($assignment->id, $assignmentids, true)) {
+        return true;
+    }
+
+    // Check visibility.
+    if (!$assignment->visible) {
+        return true;
+    }
+
+    // Check availability.
+    $cm = get_coursemodule_from_instance(MODULE_ASSIGN_NAME, $assignment->id, $courseid);
+    if (!\core_availability\info_module::is_user_visible($cm, $userid)) {
+        return true;
+    }
+
+    $context = \context_module::instance($assignment->coursemodule);
+
+    if (!has_capability($capability, $context, $userid)) {
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Check if the quiz is open.
+ *
+ * @param $quiz
+ * @return bool
+ */
+function check_quiz_time($quiz): bool {
+
+    $now = time();
+
+    return ($quiz->timeclose >= $now && $quiz->timeopen < $now) ||
+        ((int)$quiz->timeclose === 0 && $quiz->timeopen < $now) ||
+        ((int)$quiz->timeclose === 0 && (int)$quiz->timeopen === 0);
+
 }
 
 /**
