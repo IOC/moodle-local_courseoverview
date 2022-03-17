@@ -288,14 +288,7 @@ function count_student_pending_quiz(stdClass $course, int $userid): int {
 
         if (check_quiz_time($quiz)) {
 
-            // Check visibility.
-            if (!$quiz->visible) {
-                continue;
-            }
-
-            // Check availability.
-            $cm = get_coursemodule_from_instance(MODULE_QUIZ_NAME, $quiz->id, $course->id);
-            if (!\core_availability\info_module::is_user_visible($cm, $userid)) {
+            if (!is_quiz_available($quiz, $userid)) {
                 continue;
             }
 
@@ -336,19 +329,12 @@ function count_teacher_pending_quiz(stdClass $course, int $userid): int {
     $quizzes = get_all_instances_in_course(MODULE_QUIZ_NAME, $course, $userid);
 
     foreach ($quizzes as $quiz) {
-        $cm = get_coursemodule_from_id('quiz', $quiz->coursemodule);
 
-        // Check visibility.
-        if (!$quiz->visible) {
+        if (!is_quiz_available($quiz, $userid)) {
             continue;
         }
 
-        // Check availability.
-        if (!\core_availability\info_module::is_user_visible($cm, $userid)) {
-            continue;
-        }
-
-        // Check that quiz has question essay.
+        // Check that quiz has any question of type essay.
         $queryessay = "
                 SELECT COUNT({question}.id) AS total
                 FROM {question}
@@ -365,42 +351,43 @@ function count_teacher_pending_quiz(stdClass $course, int $userid): int {
             continue;
         }
 
-        if (check_quiz_time($quiz)) {
+        if (!check_quiz_time($quiz)) {
+            continue;
+        }
 
-            $context = \context_module::instance($quiz->coursemodule);
+        $context = \context_module::instance($quiz->coursemodule);
 
-            if (has_capability('mod/quiz:viewreports', $context, $userid)) {
-                $quizobj = \quiz::create($quiz->id, $userid);
+        if (!has_capability('mod/quiz:viewreports', $context, $userid)) {
+            continue;
+        }
 
-                // Get enrolled students.
-                $coursecontext = \context_course::instance($course->id);
-                $users = get_enrolled_users($coursecontext);
+        $quizobj = \quiz::create($quiz->id, $userid);
 
-                foreach ($users as $user) {
-                    if (!check_role($user->id, $coursecontext, 'student')) {
+        // Get enrolled students.
+        $coursecontext = \context_course::instance($course->id);
+
+        $users = get_enrolled_students($quizobj, $coursecontext);
+
+        foreach ($users as $user) {
+
+            // Get attempts.
+            $attempts = quiz_get_user_attempts($quizobj->get_quizid(), $user);
+
+            foreach ($attempts as $attempt) {
+                // Create attempt object.
+                $attemptobject = $quizobj->create_attempt_object($attempt);
+
+                // Get questions.
+                $slots = $attemptobject->get_slots();
+                foreach ($slots as $slot) {
+                    if (!$attemptobject->is_real_question($slot)) {
                         continue;
                     }
 
-                    // Get attempts.
-                    $attempts = quiz_get_user_attempts($quizobj->get_quizid(), $user->id);
-
-                    foreach ($attempts as $attempt) {
-                        // Create attempt object.
-                        $attemptobject = $quizobj->create_attempt_object($attempt);
-
-                        // Get questions.
-                        $slots = $attemptobject->get_slots();
-                        foreach ($slots as $slot) {
-                            if (!$attemptobject->is_real_question($slot)) {
-                                continue;
-                            }
-
-                            // Check if the status is "pending of grading".
-                            if ($attemptobject->get_question_status($slot, true) === get_string('requiresgrading', 'question')) {
-                                $sum++;
-                                continue 4;
-                            }
-                        }
+                    // Check if the status is "pending of grading".
+                    if ($attemptobject->get_question_status($slot, true) === get_string('requiresgrading', 'question')) {
+                        $sum++;
+                        continue 4;
                     }
                 }
             }
@@ -568,6 +555,79 @@ function check_quiz_time($quiz): bool {
     return ($quiz->timeclose >= $now && $quiz->timeopen < $now) ||
         ((int)$quiz->timeclose === 0 && $quiz->timeopen < $now) ||
         ((int)$quiz->timeclose === 0 && (int)$quiz->timeopen === 0);
+
+}
+
+/**
+ * Check if quiz is visible and available.
+ *
+ * @param $quiz
+ * @param int $userid
+ * @return bool
+ * @throws coding_exception
+ * @throws moodle_exception
+ */
+function is_quiz_available($quiz, int $userid): bool {
+
+    $cm = get_coursemodule_from_id(MODULE_QUIZ_NAME, $quiz->coursemodule);
+
+    // Check visibility.
+    if (!$quiz->visible) {
+        return false;
+    }
+
+    // Check availability.
+    if (!\core_availability\info_module::is_user_visible($cm, $userid)) {
+        return false;
+    }
+
+    return true;
+
+}
+
+/**
+ * Get list of unique users enrolled as students in the course. The group mode is supported.
+ *
+ * @param quiz $quizobj
+ * @param context_course $coursecontext
+ * @return array
+ * @throws dml_exception
+ */
+function get_enrolled_students(quiz $quizobj, context_course $coursecontext): array {
+
+    // If group mode is on, find out the list of the group ids the current user belongs to.
+    $groupids = [];
+    if ($quizobj->get_course()->groupmode) {
+        $groups = groups_get_my_groups();
+        foreach ($groups as $group) {
+            $groupids[] = $group->id;
+        }
+    }
+
+    $users = [];
+
+    if (!empty($groupids)) {
+        foreach ($groupids as $groupid) {
+            $users_context = get_enrolled_users($coursecontext, '', $groupid, 'u.id');
+            foreach ($users_context as $user) {
+                $users[] = $user->id;
+            }
+        }
+    } else {
+        $users = get_enrolled_users($coursecontext, '', 0, 'u.id');
+    }
+
+    $users = array_unique($users);
+
+    $filteredusers = [];
+
+    foreach ($users as $user) {
+        if (check_role($user, $coursecontext, 'student')) {
+            $filteredusers[] = $user;
+        }
+    }
+
+    return $filteredusers;
 
 }
 
