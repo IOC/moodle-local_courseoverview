@@ -369,32 +369,15 @@ function count_teacher_pending_quiz(stdClass $course, int $userid): int {
         $users = get_enrolled_students($quizobj, $coursecontext);
 
         foreach ($users as $user) {
-
-            // Get attempts.
-            $attempts = quiz_get_user_attempts($quizobj->get_quizid(), $user);
-
-            foreach ($attempts as $attempt) {
-                // Create attempt object.
-                $attemptobject = $quizobj->create_attempt_object($attempt);
-
-                // Get questions.
-                $slots = $attemptobject->get_slots();
-                foreach ($slots as $slot) {
-                    if (!$attemptobject->is_real_question($slot)) {
-                        continue;
-                    }
-
-                    // Check if the status is "pending of grading".
-                    if ($attemptobject->get_question_status($slot, true) === get_string('requiresgrading', 'question')) {
-                        $sum++;
-                        continue 4;
-                    }
-                }
+            if (is_quiz_pending($quizobj, $user)) {
+                $sum++;
+                continue 2;
             }
         }
     }
 
     return $sum;
+
 }
 
 /**
@@ -629,6 +612,33 @@ function get_enrolled_students(quiz $quizobj, context_course $coursecontext): ar
     }
 
     return $filteredusers;
+
+}
+
+function is_quiz_pending(quiz $quizobj, string $user) {
+
+    // Get attempts.
+    $attempts = quiz_get_user_attempts($quizobj->get_quizid(), $user);
+
+    foreach ($attempts as $attempt) {
+        // Create attempt object.
+        $attemptobject = $quizobj->create_attempt_object($attempt);
+
+        // Get questions.
+        $slots = $attemptobject->get_slots();
+        foreach ($slots as $slot) {
+            if (!$attemptobject->is_real_question($slot)) {
+                return true;
+            }
+
+            // Check if the status is "pending of grading".
+            if ($attemptobject->get_question_status($slot, true) === get_string('requiresgrading', 'question')) {
+                return true;
+            }
+        }
+    }
+
+    return false;
 
 }
 

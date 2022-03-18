@@ -16,6 +16,8 @@
 
 defined('MOODLE_INTERNAL') || die();
 
+const USERID = 'userid';
+
 // Load helper functions.
 require_once(dirname(__DIR__, 3) . '/mod/forum/tests/generator_trait.php');
 require_once(dirname(__DIR__, 3) . '/mod/assign/tests/generator.php');
@@ -36,19 +38,26 @@ class local_courseoverview_testcase extends advanced_testcase {
     /**
      * Set up function. In this instance we are setting up database
      * records to be used in the unit tests.
+     *
+     * @throws coding_exception
      */
     protected function setUp(): void {
         parent::setUp();
 
         set_config('defaultpreference_trackforums', 1);
 
-        $this->student = $this->getDataGenerator()->create_user();
-        $this->teacher = $this->getDataGenerator()->create_user();
+        $this->student = $this->getDataGenerator()->create_user(['username' => 'student']);
+        $this->teacher = $this->getDataGenerator()->create_user(['username' => 'teacher']);
 
         $this->course = $this->getDataGenerator()->create_course();
 
         $this->getDataGenerator()->enrol_user($this->student->id, $this->course->id, 'student');
         $this->getDataGenerator()->enrol_user($this->teacher->id, $this->course->id, 'editingteacher');
+
+        // Create a group and add both users to it.
+        $group = $this->getDataGenerator()->create_group(['courseid' => $this->course->id]);
+        $this->getDataGenerator()->create_group_member(['groupid' => $group->id, USERID => $this->student->id]);
+        $this->getDataGenerator()->create_group_member(['groupid' => $group->id, USERID => $this->student->id]);
 
     }
 
@@ -58,6 +67,7 @@ class local_courseoverview_testcase extends advanced_testcase {
      *
      * @return void
      * @throws dml_exception
+     * @throws coding_exception
      */
     public function test_forum_unread_messages(): void {
         $this->resetAfterTest();
@@ -66,37 +76,43 @@ class local_courseoverview_testcase extends advanced_testcase {
         $forum = $this->getDataGenerator()->create_module('forum', ['course' => $this->course->id]);
 
         // Check initial state.
-        $this->assertEquals(0, count_pending_forum($this->course->id, $this->student->id));
-        $this->assertEquals(0, count_pending_forum($this->course->id, $this->teacher->id));
+        $this->assertEquals(0, count_pending_forum($this->teacher->id, $this->course, true));
+        $this->assertEquals(0, count_pending_forum($this->student->id, $this->course, true));
 
         // Add a discussion to the activity forum, done by the student.
-        [$discussionstudent, $poststudent] = $this->helper_post_to_forum($forum, $this->student);
+        [, $poststudent] = $this->helper_post_to_forum($forum, $this->student);
 
         // Check that the teacher has 1 unread message. Student will also have 1 unread message because
         // when a new discussion is created in the web, it is automatically added to table 'forum_read'
         // for the creator. But in this case, it is not added to the table 'forum_read'.
-        $this->assertEquals(1, count_pending_forum($this->course->id, $this->teacher->id));
-        $this->assertEquals(1, count_pending_forum($this->course->id, $this->student->id));
+        $this->setUser($this->teacher);
+        $this->assertEquals(1, count_pending_forum($this->teacher->id, $this->course, true));
+        $this->setUser($this->student);
+        $this->assertEquals(1, count_pending_forum($this->student->id, $this->course, true));
 
         // Add a post to the discussion.
-        $reply = $this->helper_reply_to_post($poststudent, $this->student);
+        $this->helper_reply_to_post($poststudent, $this->student);
 
         // Now the teacher and the student should have 2 unread messages.
-        $this->assertEquals(2, count_pending_forum($this->course->id, $this->teacher->id));
-        $this->assertEquals(2, count_pending_forum($this->course->id, $this->student->id));
+        $this->setUser($this->teacher);
+        $this->assertEquals(2, count_pending_forum($this->teacher->id, $this->course, true));
+        $this->setUser($this->student);
+        $this->assertEquals(2, count_pending_forum($this->student->id, $this->course, true));
 
         // Add a second discussion to the activity forum, done by the teacher.
         [$discussionteacher, $postteacher] = $this->helper_post_to_forum($forum, $this->teacher);
 
-        // Now the teacher and the student should have 3 unread messages.
-        $this->assertEquals(3, count_pending_forum($this->course->id, $this->teacher->id));
-        $this->assertEquals(3, count_pending_forum($this->course->id, $this->student->id));
+        // Now the teacher should have 2 unread messages and the student should have 3.
+        $this->setUser($this->teacher);
+        $this->assertEquals(2, count_pending_forum($this->teacher->id, $this->course, true));
+        $this->setUser($this->student);
+        $this->assertEquals(3, count_pending_forum($this->student->id, $this->course, true));
 
         global $DB;
 
         // Simulate user student reading teacher's post.
         $DB->insert_record('forum_read', [
-            'userid' => $this->student->id,
+            USERID => $this->student->id,
             'forumid' => $forum->id,
             'discussionid' => $discussionteacher->id,
             'postid' => $postteacher->id,
@@ -104,8 +120,8 @@ class local_courseoverview_testcase extends advanced_testcase {
             'lastread' => time(),
         ]);
 
-        // Now the sttudent should have 2 unread messages.
-        $this->assertEquals(2, count_pending_forum($this->course->id, $this->student->id));
+        // Now the student should have 2 unread messages.
+        $this->assertEquals(2, count_pending_forum($this->student->id, $this->course, true));
 
     }
 
@@ -114,7 +130,9 @@ class local_courseoverview_testcase extends advanced_testcase {
      * submitted answers that have not been graded yet.
      *
      * @return void
+     * @throws coding_exception
      * @throws dml_exception
+     * @throws moodle_exception
      */
     public function test_assign_pending_teacher(): void {
         $this->resetAfterTest();
@@ -130,7 +148,7 @@ class local_courseoverview_testcase extends advanced_testcase {
 
         // Check the number of assignments submitted by user student.
         $submits = $DB->count_records('assign_submission', [
-            'userid' => $this->student->id,
+            USERID => $this->student->id,
             'status' => ASSIGN_SUBMISSION_STATUS_SUBMITTED,
         ]);
 
@@ -152,7 +170,9 @@ class local_courseoverview_testcase extends advanced_testcase {
      * don't have a submitted response.
      *
      * @return void
+     * @throws coding_exception
      * @throws dml_exception
+     * @throws moodle_exception
      */
     public function test_assign_pending_student(): void {
         $this->resetAfterTest();
