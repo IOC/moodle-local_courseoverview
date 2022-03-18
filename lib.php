@@ -48,7 +48,6 @@ function local_courseoverview_before_footer() {
         $coursesenrolled = enrol_get_all_users_courses($USER->id, true);
 
         $data = [];
-        $js = '';
 
         // Load classes.
         include_once($CFG->dirroot . '/mod/forum/lib.php');
@@ -117,10 +116,11 @@ function local_courseoverview_before_footer() {
  *
  * @param int $userid
  * @param stdClass $course
+ * @param bool $resetreadcache
  * @return int The number of pending forum posts.
  * @throws coding_exception
  */
-function count_pending_forum(int $userid, stdClass $course): int {
+function count_pending_forum(int $userid, stdClass $course, bool $resetreadcache = false): int {
 
     $totalunread = 0;
 
@@ -129,8 +129,8 @@ function count_pending_forum(int $userid, stdClass $course): int {
 
     // Count the number of unread forum posts in each forum, being aware of the user groups.
     foreach ($forums as $forum) {
-        $cm = get_coursemodule_from_instance(MODULE_FORUM_NAME, $forum->id, $course->id);
-        $totalunread += forum_tp_count_forum_unread_posts($cm, $course);
+        $cm = get_coursemodule_from_instance(MODULE_FORUM_NAME, $forum->id);
+        $totalunread += forum_tp_count_forum_unread_posts($cm, $course, $resetreadcache);
     }
 
     return $totalunread;
@@ -517,29 +517,27 @@ function get_unmarked_submissions($sqlassignmentids, array $dbparams): array {
  */
 function is_assignment_filtered($assignment, $courseid, $userid, $assignmentids, $capability): bool {
 
-    // Ignore assignments that are not open.
-    if (!in_array($assignment->id, $assignmentids, true)) {
-        return true;
-    }
+    $filtered = false;
 
-    // Check visibility.
-    if (!$assignment->visible) {
-        return true;
-    }
-
-    // Check availability.
-    $cm = get_coursemodule_from_instance(MODULE_ASSIGN_NAME, $assignment->id, $courseid);
-    if (!\core_availability\info_module::is_user_visible($cm, $userid)) {
-        return true;
+    if (!in_array($assignment->id, $assignmentids, true)) { // Ignore assignments that are not open.
+        $filtered = true;
+    } else if (!$assignment->visible) { // Check if the assignment is visible.
+        $filtered = true;
+    } else {
+        // Check availability.
+        $cm = get_coursemodule_from_instance(MODULE_ASSIGN_NAME, $assignment->id, $courseid);
+        if (!\core_availability\info_module::is_user_visible($cm, $userid)) {
+            $filtered = true;
+        }
     }
 
     $context = \context_module::instance($assignment->coursemodule);
 
     if (!has_capability($capability, $context, $userid)) {
-        return true;
+        $filtered = true;
     }
 
-    return false;
+    return $filtered;
 }
 
 /**
@@ -614,7 +612,10 @@ function get_enrolled_students(quiz $quizobj, context_course $coursecontext): ar
             }
         }
     } else {
-        $users = get_enrolled_users($coursecontext, '', 0, 'u.id');
+        $users_context = get_enrolled_users($coursecontext, '', 0, 'u.id');
+        foreach ($users_context as $user) {
+            $users[] = $user->id;
+        }
     }
 
     $users = array_unique($users);
