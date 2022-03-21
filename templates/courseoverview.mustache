@@ -20,31 +20,41 @@
 
 {{#data}}
     <div id="local-course-overview-container-{{course_id}}" class="local-course-overview-container">
-        <span class="local-course-overview-item">
-            {{#pix}} icon, mod_forum, {{#str}}unreadposts, mod_forum{{/str}} {{/pix}}
-            <span>{{unread_forums}}</span>
-        </span>
+        {{#is_unread_forums}}
+            <span class="local-course-overview-item">
+                {{#pix}} icon, mod_forum, {{#str}}unreadposts, mod_forum{{/str}} {{/pix}}
+                <span>{{unread_forums}}</span>
+            </span>
+        {{/is_unread_forums}}
 
         {{#is_teacher}}
-            <span class="local-course-overview-item">
-                {{#pix}}icon, mod_assign, {{#str}}pendingassignmentsteacher, local_courseoverview{{/str}} {{/pix}}
-                <span>{{teacher_pending_assign}}</span>
-            </span>
-            <span class="local-course-overview-item">
-                {{#pix}}icon, mod_quiz, {{#str}}pendingquizzesteacher, local_courseoverview{{/str}} {{/pix}}
-                <span>{{teacher_pending_quiz}}</span>
-            </span>
+            {{#is_teacher_pending_assign}}
+                <span class="local-course-overview-item">
+                    {{#pix}}icon, mod_assign, {{#str}}pendingassignmentsteacher, local_courseoverview{{/str}} {{/pix}}
+                    <span>{{teacher_pending_assign}}</span>
+                </span>
+            {{/is_teacher_pending_assign}}
+            {{#teacher_pending_quiz}}
+                <span class="local-course-overview-item">
+                    {{#pix}}icon, mod_quiz, {{#str}}pendingquizzesteacher, local_courseoverview{{/str}} {{/pix}}
+                    <span>{{teacher_pending_quiz}}</span>
+                </span>
+            {{/teacher_pending_quiz}}
         {{/is_teacher}}
 
         {{#is_student}}
-            <span class="local-course-overview-item">
-                {{#pix}}icon, mod_assign, {{#str}}pendingassignments, local_courseoverview{{/str}}{{/pix}}
-                <span>{{student_pending_assign}}</span>
-            </span>
-            <span class="local-course-overview-item">
-                {{#pix}}icon, mod_quiz, {{#str}}pendingquizzes, local_courseoverview{{/str}}{{/pix}}
-                <span>{{student_pending_quiz}}</span>
-            </span>
+            {{#is_student_pending_assign}}
+                <span class="local-course-overview-item">
+                    {{#pix}}icon, mod_assign, {{#str}}pendingassignments, local_courseoverview{{/str}}{{/pix}}
+                    <span>{{student_pending_assign}}</span>
+                </span>
+            {{/is_student_pending_assign}}
+            {{#is_student_pending_quiz}}
+                <span class="local-course-overview-item">
+                    {{#pix}}icon, mod_quiz, {{#str}}pendingquizzes, local_courseoverview{{/str}}{{/pix}}
+                    <span>{{student_pending_quiz}}</span>
+                </span>
+            {{/is_student_pending_quiz}}
         {{/is_student}}
     </div>
 {{/data}}

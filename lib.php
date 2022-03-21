@@ -79,10 +79,15 @@ function local_courseoverview_before_footer() {
                 'is_student' => $isstudent ?? false,
                 'is_teacher' => $isteacher ?? false,
                 'unread_forums' => $unreadforums,
+                'is_unread_forums' => (bool)$unreadforums,
                 'student_pending_assign' => $studentpendingassign ?? 0,
+                'is_student_pending_assign' => (bool)($studentpendingassign ?? 0),
                 'student_pending_quiz' => $studentpendingquiz ?? 0,
+                'is_student_pending_quiz' => (bool)($studentpendingquiz ?? 0),
                 'teacher_pending_assign' => $teacherpendingassign ?? 0,
+                'is_teacher_pending_assign' => (bool)($teacherpendingassign ?? 0),
                 'teacher_pending_quiz' => $teacherpendingquiz ?? 0,
+                'is_teacher_pending_quiz' => (bool)($teacherpendingquiz ?? 0),
             ];
 
             // Generate the HTML code for the course. This code includes img tags and numerical information and
