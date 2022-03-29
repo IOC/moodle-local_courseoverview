@@ -29,3 +29,5 @@ $string['pendingassignments'] = 'Pending assignments';
 $string['pendingassignmentsteacher'] = 'Assignments pending to grade';
 $string['pendingquizzes'] = 'Pending quizzes';
 $string['pendingquizzesteacher'] = 'Quizzes pending to review';
+$string['onepostunread'] = 'unread in';
+$string['manypostsunread'] = 'unread in';

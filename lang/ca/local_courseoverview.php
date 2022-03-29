@@ -29,3 +29,5 @@ $string['pendingassignments'] = 'Tasques pendents';
 $string['pendingassignmentsteacher'] = 'Tasques pendents d\'avaluar';
 $string['pendingquizzes'] = 'Qüestionaris pendents';
 $string['pendingquizzesteacher'] = 'Qüestionaris pendents d\'avaluar';
+$string['onepostunread'] = 'no llegit a';
+$string['manypostsunread'] = 'no llegits a';

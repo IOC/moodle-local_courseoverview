@@ -57,7 +57,11 @@ function local_courseoverview_before_footer() {
 
         foreach ($coursesenrolled as $course) {
 
-            $unreadforums = count_pending_forum($USER->id, $course);
+            $unreadforums = get_pending_forums($USER->id, $course);
+
+            if ($unreadforums['totalunread'] > 0) {
+                $forumsdetails = format_unreadforums($unreadforums);
+            }
 
             $coursecontext = \context_course::instance($course->id);
 
@@ -78,8 +82,9 @@ function local_courseoverview_before_footer() {
                 'course_id' => $course->id,
                 'is_student' => $isstudent ?? false,
                 'is_teacher' => $isteacher ?? false,
-                'unread_forums' => $unreadforums,
-                'is_unread_forums' => (bool)$unreadforums,
+                'unread_forums' => $unreadforums['totalunread'],
+                'is_unread_forums' => (bool)$unreadforums['totalunread'],
+                'forums_details' => $forumsdetails ?? '',
                 'student_pending_assign' => $studentpendingassign ?? 0,
                 'is_student_pending_assign' => (bool)($studentpendingassign ?? 0),
                 'student_pending_quiz' => $studentpendingquiz ?? 0,
@@ -88,6 +93,8 @@ function local_courseoverview_before_footer() {
                 'is_teacher_pending_assign' => (bool)($teacherpendingassign ?? 0),
                 'teacher_pending_quiz' => $teacherpendingquiz ?? 0,
                 'is_teacher_pending_quiz' => (bool)($teacherpendingquiz ?? 0),
+                'url_assign' => new \moodle_url('/mod/assign/index.php', ['id' => $course->id]),
+                'url_quiz' => new \moodle_url('/mod/quiz/index.php', ['id' => $course->id]),
             ];
 
             // Generate the HTML code for the course. This code includes img tags and numerical information and
@@ -117,16 +124,17 @@ function local_courseoverview_before_footer() {
 }
 
 /**
- * Counts the number of unread forum posts in a course. Is aware of the user groups.
+ * Get information regarding unread forum posts in a course. Is aware of the user groups.
  *
  * @param int $userid
  * @param stdClass $course
  * @param bool $resetreadcache
- * @return int The number of pending forum posts.
+ * @return array The information about pending forum posts.
  * @throws coding_exception
  */
-function count_pending_forum(int $userid, stdClass $course, bool $resetreadcache = false): int {
+function get_pending_forums(int $userid, stdClass $course, bool $resetreadcache = false): array {
 
+    $unreadforums = [];
     $totalunread = 0;
 
     // Get all the forums in the course.
@@ -134,11 +142,27 @@ function count_pending_forum(int $userid, stdClass $course, bool $resetreadcache
 
     // Count the number of unread forum posts in each forum, being aware of the user groups.
     foreach ($forums as $forum) {
-        $cm = get_coursemodule_from_instance(MODULE_FORUM_NAME, $forum->id);
+
+        $cm = get_coursemodule_from_instance(MODULE_FORUM_NAME, $forum->id, $course->id);
         $totalunread += forum_tp_count_forum_unread_posts($cm, $course, $resetreadcache);
+        $unreaddiscussions = forum_get_discussions_unread($cm);
+
+        if (!empty($unreaddiscussions)) {
+            $count = 0;
+
+            foreach ($unreaddiscussions as $unread) {
+                $count += $unread;
+            }
+
+            $unreadforums[$forum->id] = [
+                'id' => $forum->coursemodule,
+                'name' => $forum->name,
+                'count' => $count,
+            ];
+        }
     }
 
-    return $totalunread;
+    return $unreadforums + ['totalunread' => $totalunread];
 
 }
 
@@ -382,6 +406,36 @@ function count_teacher_pending_quiz(stdClass $course, int $userid): int {
     }
 
     return $sum;
+
+}
+
+/**
+ * Generate a piece of HTML code that formats the information about unread forum posts.
+ *
+ * @param array $unreadforums
+ * @return string
+ * @throws coding_exception
+ */
+function format_unreadforums(array $unreadforums): string {
+
+    global $CFG;
+
+    $content = '<ul>';
+
+    foreach ($unreadforums as $key => $value) {
+        if (is_numeric($key)) {
+            $unreadtext = ($value['count'] === 1) ? get_string('onepostunread', 'local_courseoverview')
+                : get_string('manypostsunread', 'local_courseoverview');
+
+            $content .= '<li><strong>' . $value['count'] . '</strong>'
+                . ' ' . $unreadtext . ' '
+                . '<a href="' . $CFG->wwwroot . '/mod/forum/view.php?id=' . $value['id'] . '" target="_blank">'
+                . addslashes($value['name'])
+                . '</a></li>';
+        }
+    }
+
+    return $content . '</ul>';
 
 }
 
