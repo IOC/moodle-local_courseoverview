@@ -76,8 +76,8 @@ class local_courseoverview_testcase extends advanced_testcase {
         $forum = $this->getDataGenerator()->create_module('forum', ['course' => $this->course->id]);
 
         // Check initial state.
-        $this->assertEquals(0, count_pending_forum($this->teacher->id, $this->course, true));
-        $this->assertEquals(0, count_pending_forum($this->student->id, $this->course, true));
+        $this->assertEquals(0, get_pending_forums($this->teacher->id, $this->course, true)['totalunread']);
+        $this->assertEquals(0, get_pending_forums($this->student->id, $this->course, true)['totalunread']);
 
         // Add a discussion to the activity forum, done by the student.
         [, $poststudent] = $this->helper_post_to_forum($forum, $this->student);
@@ -86,27 +86,27 @@ class local_courseoverview_testcase extends advanced_testcase {
         // when a new discussion is created in the web, it is automatically added to table 'forum_read'
         // for the creator. But in this case, it is not added to the table 'forum_read'.
         $this->setUser($this->teacher);
-        $this->assertEquals(1, count_pending_forum($this->teacher->id, $this->course, true));
+        $this->assertEquals(1, get_pending_forums($this->teacher->id, $this->course, true)['totalunread']);
         $this->setUser($this->student);
-        $this->assertEquals(1, count_pending_forum($this->student->id, $this->course, true));
+        $this->assertEquals(1, get_pending_forums($this->student->id, $this->course, true)['totalunread']);
 
         // Add a post to the discussion.
         $this->helper_reply_to_post($poststudent, $this->student);
 
         // Now the teacher and the student should have 2 unread messages.
         $this->setUser($this->teacher);
-        $this->assertEquals(2, count_pending_forum($this->teacher->id, $this->course, true));
+        $this->assertEquals(2, get_pending_forums($this->teacher->id, $this->course, true)['totalunread']);
         $this->setUser($this->student);
-        $this->assertEquals(2, count_pending_forum($this->student->id, $this->course, true));
+        $this->assertEquals(2, get_pending_forums($this->student->id, $this->course, true)['totalunread']);
 
         // Add a second discussion to the activity forum, done by the teacher.
         [$discussionteacher, $postteacher] = $this->helper_post_to_forum($forum, $this->teacher);
 
         // Now the teacher should have 2 unread messages and the student should have 3.
         $this->setUser($this->teacher);
-        $this->assertEquals(2, count_pending_forum($this->teacher->id, $this->course, true));
+        $this->assertEquals(2, get_pending_forums($this->teacher->id, $this->course, true)['totalunread']);
         $this->setUser($this->student);
-        $this->assertEquals(3, count_pending_forum($this->student->id, $this->course, true));
+        $this->assertEquals(3, get_pending_forums($this->student->id, $this->course, true)['totalunread']);
 
         global $DB;
 
@@ -121,7 +121,7 @@ class local_courseoverview_testcase extends advanced_testcase {
         ]);
 
         // Now the student should have 2 unread messages.
-        $this->assertEquals(2, count_pending_forum($this->student->id, $this->course, true));
+        $this->assertEquals(2, get_pending_forums($this->student->id, $this->course, true)['totalunread']);
 
     }
 
