@@ -16,6 +16,9 @@
 
 defined('MOODLE_INTERNAL') || die();
 
+/**
+ * Constant to avoid repeated use of 'userid' literal.
+ */
 const USERID = 'userid';
 
 // Load helper functions.

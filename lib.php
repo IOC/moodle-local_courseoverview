@@ -23,8 +23,19 @@
  * @license     http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+/**
+ * Name of module forum.
+ */
 const MODULE_FORUM_NAME = 'forum';
+
+/**
+ * Name of module assign.
+ */
 const MODULE_ASSIGN_NAME = 'assign';
+
+/**
+ * Name of module quiz.
+ */
 const MODULE_QUIZ_NAME = 'quiz';
 
 /**
@@ -506,12 +517,12 @@ function get_assignment_ids_teamsubmission(stdClass $assignment, stdClass $cours
  * Build up an array of unmarked submissions indexed by assignment id / user id for use where
  * the user has grading rights on assignment.
  *
- * @param $sqlassignmentids
+ * @param string $sqlassignmentids
  * @param array $dbparams
  * @return array
  * @throws dml_exception
  */
-function get_unmarked_submissions($sqlassignmentids, array $dbparams): array {
+function get_unmarked_submissions(string $sqlassignmentids, array $dbparams): array {
 
     global $DB;
 
@@ -548,16 +559,16 @@ function get_unmarked_submissions($sqlassignmentids, array $dbparams): array {
 /**
  * Decide if the assignment is eligible or has to be discarded.
  *
- * @param $assignment
- * @param $courseid
- * @param $userid
- * @param $assignmentids
- * @param $capability
+ * @param stdClass $assignment
+ * @param int $courseid
+ * @param int $userid
+ * @param array $assignmentids
+ * @param string $capability
  * @return bool
  * @throws coding_exception
  * @throws moodle_exception
  */
-function is_assignment_filtered($assignment, $courseid, $userid, $assignmentids, $capability): bool {
+function is_assignment_filtered(stdClass $assignment, int $courseid, int $userid, array $assignmentids, string $capability): bool {
 
     $filtered = false;
 
@@ -585,10 +596,10 @@ function is_assignment_filtered($assignment, $courseid, $userid, $assignmentids,
 /**
  * Check if the quiz is open.
  *
- * @param $quiz
+ * @param stdClass $quiz
  * @return bool
  */
-function check_quiz_time($quiz): bool {
+function check_quiz_time(stdClass $quiz): bool {
 
     $now = time();
 
@@ -601,13 +612,13 @@ function check_quiz_time($quiz): bool {
 /**
  * Check if quiz is visible and available.
  *
- * @param $quiz
+ * @param stdClass $quiz
  * @param int $userid
  * @return bool
  * @throws coding_exception
  * @throws moodle_exception
  */
-function is_quiz_available($quiz, int $userid): bool {
+function is_quiz_available(stdClass $quiz, int $userid): bool {
 
     $cm = get_coursemodule_from_id(MODULE_QUIZ_NAME, $quiz->coursemodule);
 
@@ -648,14 +659,14 @@ function get_enrolled_students(quiz $quizobj, context_course $coursecontext): ar
 
     if (!empty($groupids)) {
         foreach ($groupids as $groupid) {
-            $users_context = get_enrolled_users($coursecontext, '', $groupid, 'u.id');
-            foreach ($users_context as $user) {
+            $userscontext = get_enrolled_users($coursecontext, '', $groupid, 'u.id');
+            foreach ($userscontext as $user) {
                 $users[] = $user->id;
             }
         }
     } else {
-        $users_context = get_enrolled_users($coursecontext, '', 0, 'u.id');
-        foreach ($users_context as $user) {
+        $userscontext = get_enrolled_users($coursecontext, '', 0, 'u.id');
+        foreach ($userscontext as $user) {
             $users[] = $user->id;
         }
     }
@@ -674,7 +685,16 @@ function get_enrolled_students(quiz $quizobj, context_course $coursecontext): ar
 
 }
 
-function is_quiz_pending(quiz $quizobj, string $user) {
+/**
+ * Check if a user has submitted a quiz. Returns true if there is a submission that needs
+ * grading, false otherwise.
+ *
+ * @param quiz $quizobj
+ * @param string $user
+ * @return bool
+ * @throws coding_exception
+ */
+function is_quiz_pending(quiz $quizobj, string $user): bool {
 
     // Get attempts.
     $attempts = quiz_get_user_attempts($quizobj->get_quizid(), $user);
