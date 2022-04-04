@@ -13,6 +13,10 @@ div.dashboard-card div.course-info-container {
     padding: 0;
 }
 
+.list-group-item .local-course-overview-container ul li {
+    list-style-type: disc;
+}
+
 /* Summary format */
 .course-summaryitem .local-course-overview-container {
     margin-left: 85px;
