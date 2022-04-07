@@ -117,6 +117,10 @@ function local_courseoverview_before_footer() {
                 $OUTPUT->render_from_template('local_courseoverview/courseoverview', ['data' => $coursedata])
             );
 
+            // Delete the course information before the next iteration.
+            unset($isstudent, $isteacher, $unreadforums, $forumsdetails, $studentpendingassign,
+                $studentpendingquiz, $teacherpendingassign, $teacherpendingquiz);
+
         }
 
         // Build an array of courses to be passed to the javascript script. Each item contains the data of a course.
