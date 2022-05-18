@@ -158,13 +158,14 @@ class local_courseoverview_testcase extends advanced_testcase {
         $this->assertEquals(1, $submits);
 
         // Check the number of assignments pending grading by user teacher.
-        $this->assertEquals(1, count_teacher_pending_assign($this->course, $this->teacher->id));
+        $assignments = get_all_instances_in_course(MODULE_ASSIGN_NAME, $this->course, $this->teacher->id);
+        $this->assertEquals(1, count_teacher_pending_assign($this->course, $assignments));
 
         // Grade the submission.
         $this->mark_submission($this->teacher, $assign, $this->student);
 
         // Check the assignment has been graded.
-        $this->assertEquals(0, count_teacher_pending_assign($this->course, $this->teacher->id));
+        $this->assertEquals(0, count_teacher_pending_assign($this->course, $assignments));
 
     }
 
@@ -190,7 +191,9 @@ class local_courseoverview_testcase extends advanced_testcase {
         $assign1 = $this->create_instance($this->course, $params);
         $assign2 = $this->create_instance($this->course, $params);
 
-        $this->assertEquals(2, count_student_pending_assign($this->course, $this->student->id));
+        $assignments = get_all_instances_in_course(MODULE_ASSIGN_NAME, $this->course, $this->teacher->id);
+
+        $this->assertEquals(2, count_student_pending_assign($this->course, $assignments));
 
         // Add a submission to both tasks.
         $this->add_submission($this->student, $assign1);
@@ -211,11 +214,11 @@ class local_courseoverview_testcase extends advanced_testcase {
 
         // Submit one assignment and check that there is only 1 pending task.
         $this->submit_for_grading($this->student, $assign1);
-        $this->assertEquals(1, count_student_pending_assign($this->course, $this->student->id));
+        $this->assertEquals(1, count_student_pending_assign($this->course, $assignments));
 
         // Submit the other assignment and check that there are none pending tasks.
         $this->submit_for_grading($this->student, $assign2);
-        $this->assertEquals(0, count_student_pending_assign($this->course, $this->student->id));
+        $this->assertEquals(0, count_student_pending_assign($this->course, $assignments));
 
     }
 
@@ -230,8 +233,10 @@ class local_courseoverview_testcase extends advanced_testcase {
     public function test_quizz_pending_tasks(): void {
         $this->resetAfterTest();
 
+        $quizzes = get_all_instances_in_course(MODULE_QUIZ_NAME, $this->course, $this->student->id);
+
         // In the beginning, there are no quizzes ready to be responded to.
-        $this->assertEquals(0, count_student_pending_quiz($this->course, $this->student->id));
+        $this->assertEquals(0, count_student_pending_quiz($this->student->id, $quizzes));
 
         // Create the quiz.
         $quizgenerator = $this->getDataGenerator()->get_plugin_generator('mod_quiz');
@@ -248,9 +253,12 @@ class local_courseoverview_testcase extends advanced_testcase {
         $question = $questiongenerator->create_question('essay', 'plain', ['category' => $cat->id]);
         quiz_add_quiz_question($question->id, $quiz, 0, 10);
 
+        // After the creation of the quiz, the list of quizzes must be updated.
+        $quizzes = get_all_instances_in_course(MODULE_QUIZ_NAME, $this->course, $this->student->id);
+
         // At this point, there should be a quiz with an essay question in, which can be responded to.
-        $this->assertEquals(1, count_student_pending_quiz($this->course, $this->student->id));
-        $this->assertEquals(0, count_teacher_pending_quiz($this->course, $this->teacher->id));
+        $this->assertEquals(1, count_student_pending_quiz($this->student->id, $quizzes));
+        $this->assertEquals(0, count_teacher_pending_quiz($this->course, $this->teacher->id, $quizzes));
 
         // Create and start the attempt.
         $quizobj = quiz::create($quiz->id);
@@ -281,7 +289,7 @@ class local_courseoverview_testcase extends advanced_testcase {
 
         // Now, there should be a quiz with an essay question in, which has been responded to,
         // so the teacher can grade it.
-        $this->assertEquals(1, count_teacher_pending_quiz($this->course, $this->teacher->id));
+        $this->assertEquals(1, count_teacher_pending_quiz($this->course, $this->teacher->id, $quizzes));
 
     }
 
