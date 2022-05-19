@@ -167,20 +167,14 @@ function get_pending_forums(int $userid, stdClass $course, bool $resetreadcache 
     foreach ($forums as $forum) {
 
         $cm = get_coursemodule_from_instance(MODULE_FORUM_NAME, $forum->id, $course->id);
-        $totalunread += forum_tp_count_forum_unread_posts($cm, $course, $resetreadcache);
-        $unreaddiscussions = forum_get_discussions_unread($cm);
+        $forumunread = forum_tp_count_forum_unread_posts($cm, $course, $resetreadcache);
+        $totalunread += $forumunread;
 
-        if (!empty($unreaddiscussions)) {
-            $count = 0;
-
-            foreach ($unreaddiscussions as $unread) {
-                $count += $unread;
-            }
-
+        if (!empty($forumunread)) {
             $unreadforums[$forum->id] = [
                 'id' => $forum->coursemodule,
                 'name' => $forum->name,
-                'count' => $count,
+                'count' => $forumunread,
             ];
         }
     }
